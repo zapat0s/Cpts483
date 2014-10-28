@@ -14,7 +14,7 @@ from geometry_msgs.msg import Twist
 class ARImageTacker:
     def __init__(self):
         # Setup Publishers and Subscibers
-        self.twistPublisher = rospy.Publisher('cmd_vel_mux/input/teleop', Twist)
+        self.twistPublisher = rospy.Publisher('cmd_vel', Twist)
         self.subVideo = rospy.Subscriber('/ardrone/front/image_raw', Image, self.ReceiveImage)
 
         self.image = None
@@ -22,19 +22,28 @@ class ARImageTacker:
 
         # Control Loop
         while True:
-            # Get Image
-        
-            (x, y) = BallLocation(image)
-            if x - image.width/2 < 10 and x - image.width/2 >  -10: # Ball is centered hhorizontaly
-                if y - image.height/2 < 10 and y - image.height/2 > -10: # Ball is centered verticaly            
-		    # fly forward
-                    print "Flying forward"
+            cv_image = None
+            self.imageLock.acquire()
+            try:
+                if self.image is not None:    
+                    cv_img = ToOpenCV(self.image)
+            finally:
+                self.imageLock.release()
+            if cv_image is not None:
+                cv2.imshow('camera', cv_img)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+                (x, y) = BallLocation(cv_img)
+                if x - cv_image.width/2 < 10 and x - cv_image.width/2 >  -10: # Ball is centered hhorizontaly
+                    if y - cv_image.height/2 < 10 and y - cv_image.height/2 > -10: # Ball is centered verticaly            
+		        # fly forward
+                        print "Flying forward"
+                    else:
+                        # change altitude
+                        print "Changing altitude"
                 else:
-                    # change altitude
-                    print "Changing altitude"
-            else:
-                # rotate
-                print "Rotating"
+                    # rotate
+                    print "Rotating"
 
     def ToOpenCV(ros_image):
         try:
@@ -69,6 +78,13 @@ class ARImageTacker:
         (x,y),radius = cv2.minEnclosingCircle(tar_contour)
         center = (int(x),int(y))
         return center;
+
+    def ReceiveImage(self, data):
+        self.imageLock.acquire()
+        try:
+            self.image = data
+        finally:
+            self.imageLock.release()
 
 # main file -- if we "import move" in another file, this code will not execute.
 if __name__== "__main__":
